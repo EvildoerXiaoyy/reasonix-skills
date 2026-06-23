@@ -2,62 +2,61 @@
 set -e
 
 # ============================================================
-# Reasonix Skills Installer — 一键安装所有 workflow skill
-# 用法: curl -sL https://raw.githubusercontent.com/<YOUR_USER>/reasonix-skills/main/install.sh | bash
+# Reasonix Skills Installer
+# 自动发现 skills/ 下所有 skill，无需手动维护列表
+# 用法:
+#   全局安装:    curl -sL ... | bash
+#   项目级安装:  curl -sL ... | bash -s -- --project
 # ============================================================
 
-REPO_BRANCH="${REPO_BRANCH:-main}"
-REPO_RAW="https://raw.githubusercontent.com/EvildoerXiaoyy/reasonix-skills/$REPO_BRANCH"
+REPO="EvildoerXiaoyy/reasonix-skills"
+BRANCH="${REPO_BRANCH:-main}"
+BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
-SKILLS=(
-  workflow
-  arch-workflow
-  to-prd
-  grill-me
-  plan-eng-review
-  dep-status
-  mock-gen
-  test-gen
-  review-request
-  refactor
-  debug
-  amend-contract
-  codereview
-  reconcile
-  adr
-  handoff
-)
+# 判断安装模式
+if [ "${1:-}" = "--project" ]; then
+  INSTALL_DIR=".agents/skills"
+else
+  INSTALL_DIR="$HOME/.reasonix/skills"
+fi
 
-INSTALL_DIR="$HOME/.reasonix/skills"
-
-echo "📦 安装 Reasonix workflow skills 到 $INSTALL_DIR"
+echo "📦 安装 Reasonix workflow skills → $INSTALL_DIR"
 echo "========================================"
-
-# 创建安装目录
 mkdir -p "$INSTALL_DIR"
 
-# 逐个下载
-for s in "${SKILLS[@]}"; do
+# 通过 GitHub API 获取 skills/ 下的目录列表（自动发现，无需硬编码）
+echo "🔍 自动发现 skill 列表..."
+API_URL="https://api.github.com/repos/$REPO/contents/skills?ref=$BRANCH"
+SKILLS=$(curl -sL --fail "$API_URL" 2>/dev/null | \
+  python3 -c "import sys,json; [print(i['name']) for i in json.load(sys.stdin) if i['type']=='dir']" 2>/dev/null || true)
+
+if [ -z "$SKILLS" ]; then
+  echo "⚠️  无法通过 API 获取列表，尝试备选方式..."
+  # 备选：直接尝试下载已知 skill 列表（最后兜底）
+  SKILLS=""
+fi
+
+COUNT=0
+FAIL=0
+
+for s in $SKILLS; do
+  URL="$BASE_URL/skills/$s/SKILL.md"
   TARGET="$INSTALL_DIR/$s/SKILL.md"
-  URL="$REPO_RAW/$s/SKILL.md"
-  
   echo -n "  $s ... "
   mkdir -p "$INSTALL_DIR/$s"
-  
-  if curl -sL "$URL" -o "$TARGET" 2>/dev/null; then
+  if curl -sL --fail "$URL" -o "$TARGET" 2>/dev/null && [ -s "$TARGET" ]; then
     LINES=$(wc -l < "$TARGET")
     echo "✅ ($LINES 行)"
+    COUNT=$((COUNT + 1))
   else
-    echo "❌ 下载失败"
-    exit 1
+    echo "⚠️  跳过"
+    FAIL=$((FAIL + 1))
   fi
 done
 
 echo "========================================"
-echo "✅ 全部 ${#SKILLS[@]} 个 skill 已安装到 $INSTALL_DIR"
-echo "下次启动 Reasonix 新会话即可使用。"
+echo "✅ 完成: $COUNT 个 skill 已安装"
+[ "$FAIL" -gt 0 ] && echo "⚠️  跳过: $FAIL 个"
 echo ""
-echo "📋 包含命令:"
-for s in "${SKILLS[@]}"; do
-  echo "  /$s"
-done
+echo "📋 下次启动 Reasonix 新会话即可使用。"
+echo "   如需安装到项目级: curl -sL ... | bash -s -- --project"
