@@ -93,6 +93,8 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
 
 **产出物**：ARCHITECTURE.md + PRD + API_CONTRACT.yaml + DB_SCHEMA.sql + MODULE_DEPENDENCY.md + 审查报告 + 人类签字记录
 
+**阶段 commit**：`git commit -m "stage-1: 整体规划完成 — <项目名>"` — 锁定规划基线，后续阶段以此为基础。
+
 **关于基线**：基线在人类签字后生效。阶段二中若发现基线设计不合理，可通过 `/amend-contract` 发起轻量级修订，而非被动等待阶段四的漂移检测。
 
 ---
@@ -114,7 +116,8 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
   - 用 `// TODO:` 预留边界条件、异常处理、并发安全、极限数据等测试方法占位符
 - **👤 人类介入**：审查 AI 生成的测试，并在 TODO 占位符处补充核心 Edge Case 和异常流。
 - **/review-request**：高风险模块（安全相关、核心业务、外部接口）必须执行二审；低风险模块可选。
-- 测试定稿，代码入库。
+- 测试定稿，代码入库，同时输出 `TEST_INTENT.md` 记录每个测试的防御意图，作为后续 review 的仲裁依据。
+- **`git commit -m "test: <模块> 测试定稿"`** — 测试文件入库，此时运行测试应全部失败（Red）。
 - ⚠️ 若后续实现阶段修改测试涉及契约变更，必须执行 `/amend-contract`，不可静默修改。
 
 **③ TDD 实现循环（含健康度监控）**
@@ -125,7 +128,8 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
   planned_actions: [read_file, grep, run_command]
   expected_outcome: "测试通过"
   ```
-- 红绿循环：运行测试(Red) → 编写最小实现(Green) → 频繁提交。
+- 红绿循环：运行测试(Red) → 编写最小实现(Green) → 进入下一轮，**每完成一个功能点（如一个方法的所有测试通过）后 `git commit -m "feat: <模块> <方法> 通过"`**。
+- 该模块全部测试用例通过后 **`git commit -m "feat: <模块> 全部功能完成"`** — TDD 实现阶段结束。
 - 重构：所有测试通过后，调用 `/refactor` 在无副作用前提下优化代码结构。
 - **熔断机制（增强版）**：
   - 传统触发：同一测试用例连续失败 ≥3 次
@@ -133,18 +137,27 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
   - 触发后**不是强制进入 /debug，而是暂停并提示开发者**：
     > "同一用例已连续失败 3 次。建议执行 /debug 诊断。是否继续？[Y:继续实现/N:进入诊断/C:人工检查代码]"
 - 遇架构级决策调用 `/adr` 记录。
+- **Commit 规范**：遵循以下类型，每完成一个逻辑步骤即 commit，不可批量积攒：
+  - `test: <模块> 测试定稿` — 测试文件入库
+  - `feat: <模块> <功能点> 通过` — 一个功能点的所有测试通过
+  - `feat: <模块> 全部功能完成` — 模块内所有用例通过
+  - `refactor: <模块> <动作>` — 重构后
+  - `adr: <标题>` — 新增架构决策
+  - `gate: <模块> 门禁通过` — 模块门禁
+  - `stage-N: <阶段名> 完成 — <项目>` — 阶段结束
 - **契约修订**：若实现中发现 API 契约或类型定义需要调整，执行 `/amend-contract`：
   - 记录变更原因和影响分析
   - 更新契约文件
   - 标记所有受影响模块为"需重新验证"
 
 **④ 模块门禁（阻塞式）**
+- `git commit -m "gate: <模块> 模块门禁通过"` 记录门禁状态。
 - 运行测试套件，覆盖率达标。
 - `/codereview --gate` 执行阻塞式代码审查（静态分析 + 规范检查 + 人工 review 流程）。
 - 执行契约兼容性冒烟测试（使用真实依赖或 Mock 验证接口行为一致性）。
 - ✅ 通过后标记模块完成，模块状态写入 MODULE_STATUS.md。
 
-**产出物（每个模块）**：通过的测试 + 实现代码 + 增量 ADR + 可能更新的契约文件
+**产出物（每个模块）**：通过的测试 + 实现代码 + 增量 ADR + 可能更新的契约文件 + `git commit -m "gate: <模块> 门禁通过"`
 
 ---
 
@@ -159,7 +172,7 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
 | 跨模块 review | 手动 | 检查模块间接口是否对齐、数据流是否完整、有无未处理的 TODOs |
 | 合并门禁 | `/codereview --gate --base main` | blocker / waiver / recheck 全流程，决定能否合并 |
 
-**产出物**：门禁报告 + 集成测试结果
+**产出物**：门禁报告 + 集成测试结果 + `git commit -m "stage-3: 集成完成 — <项目名>"`
 
 ---
 
@@ -174,7 +187,7 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
 | 决策沉淀 | `/adr` | 回顾和定稿所有 ADR |
 | 上下文压缩 | `/handoff` | 生成交接文档，包含：核心架构决策摘要、未解决问题、Context Budget 建议（关键文件列表 + 优先级） |
 
-**产出物**：漂移报告 + 人类裁决记录 + ADR 定稿 + handoff 文档
+**产出物**：漂移报告 + 人类裁决记录 + ADR 定稿 + handoff 文档 + `git commit -m "stage-4: 回顾完成 — <项目名>"`
 
 ---
 

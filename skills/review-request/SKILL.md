@@ -15,6 +15,7 @@ argument-hint: "哪个功能或模块需要二审？（可选：--exclude testda
 - `ARCHITECTURE.md` — 系统上下文、组件、数据流
 - `docs/adr/` — 相关架构决策（特别是 trade-off）
 - 最新的 `/codereview --assistant` 报告 — Reasonix 一审已检查的内容
+- `TEST_INTENT.md`（若存在）— 测试意图清单，每个边界测试的防御目标，作为判断测试是否跑偏的仲裁依据
 
 **Diff 压缩策略：** 如果 diff 超过 500 行，优先提取核心业务逻辑文件，排除自动生成的代码（如 `pb.go`、`mock_*.go`、`generated.go`）。在审查包开头注明跳过了哪些文件。
 
@@ -35,6 +36,9 @@ argument-hint: "哪个功能或模块需要二审？（可选：--exclude testda
 
 ## Architecture Context
 <how this change fits into the system — 3-5 lines max>
+
+## Test Intent Reference
+If a `TEST_INTENT.md` exists for the reviewed module, include it here. This is the **source of truth** for what each test was meant to defend — use it to judge whether tests have drifted from their original intent.
 
 ## Trade-offs to Respect
 
@@ -73,6 +77,49 @@ Focus on things the primary review might miss:
 - **Edge cases**: boundary conditions, error paths, nil/empty handling
 - **Consistency**: does this match ARCHITECTURE.md and existing ADRs?
 - **API design**: does the interface feel right from a consumer's perspective?
+- **Semantic consistency**: for each test/function, does the docstring claim ↔ constructed input ↔ assert verification form a self-consistent triple? Are there tests named "test_X" that construct non-X?
+
+## Review Method — Systematic Scan Checklist
+
+Apply this to every test/function in the diff. **Do not skip any item.**
+
+### Triple-Check (every test function)
+
+For each test function, verify self-consistency across three layers:
+
+1. **Docstring/comment** — what scenario does it claim to test?
+2. **Constructed input** — is the input actually the scenario described in the docstring?  
+   *(Common trap: test named "test_dimension_mismatch" constructs input where dimension matches — the mismatch never happens.)*
+3. **Assert validation** — does the assert actually verify the behavior claimed in the docstring?  
+   *(Common trap: docstring says "should return medium", assert only checks `isfinite`.)*
+
+### Pairwise Check (table-driven / grouped tests)
+
+Place semantically related test cases side by side and check for contradictory assumptions:
+
+- Do two tests imply mutually exclusive contracts?  
+  *(e.g. `test_percentile_0` and `test_percentile_100` use different boundary semantics for `<` vs `<=` — this is a real defect.)*
+
+### try/except Failure Path Check
+
+For each exception handler:
+
+- Is the `except` too broad, swallowing bugs that should surface?  
+  *(`except Exception: pass` is nearly a no-op test.)*
+- Are there exactly two expected outcomes (success + expected error), or is a third path silently passing?
+
+### Threshold & Comment Consistency
+
+- Are numeric thresholds in comments self-consistent?  
+  *(e.g. "fewer than 3 layers" written as `layers < 4` — not equivalent.)*
+- Do comments describing API behavior match actual implementation?  
+  *(e.g. describing negative-index semantics for tensor but testing on tuple.)*
+
+### Cross-Validation Against One-Shot Confirmed Items
+
+For each issue that Reasonix marked as "fixed" or "confirmed resolved":
+
+- Independently verify whether the fix introduces new false-green risks, rather than only checking whether the affected line was changed.
 
 ## Response Format
 
@@ -108,6 +155,7 @@ Include this JSON block as the source of truth:
         "file": "pkg/foo/bar.go",
         "line": 42,
         "issue": "description",
+        "category": "false_green|semantic_mismatch|comment_error|assertion_too_weak|security|performance|edge_case|other",
         "conflict": false
       }
     ]
@@ -127,6 +175,8 @@ Include this JSON block as the source of truth:
 - [ ] JSON 是完整数据源，Markdown 仅为摘要（不写两遍）
 - [ ] CONFLICT 标记有明确的行号级判断依据
 - [ ] 用户指定的 `--exclude` 参数已应用
+- [ ] 审查方法已包含：三元组自洽检查、配对检查、try/except 失败路径检查
+- [ ] JSON findings 包含 `category` 字段用于问题分类追踪
 
 ## 交接
 
@@ -145,8 +195,10 @@ Focus on what the primary review might miss: security, concurrency, performance,
 Do NOT suggest reverting conscious trade-offs — they're documented in the file.
 
 Output:
-1. JSON as source of truth (complete findings with file:line)
+1. JSON as source of truth (complete findings with file:line, include category for each finding)
 2. Markdown as summary only (no long descriptions)
+
+Apply the systematic scan checklist: triple-check (docstring→input→assert), pairwise check for contradictory assumptions, try/except failure path analysis, and threshold consistency.
 
 Conflict judgment: compare your High findings against Reasonix's key findings (listed by file:line).
 If you find a High issue on a line Reasonix marked as safe, mark CONFLICT: Yes.

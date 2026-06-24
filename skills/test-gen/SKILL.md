@@ -44,6 +44,18 @@ allowed-tools:
 4. **输出位置**
    将生成的测试文件写入模块对应的测试目录（如 `pkg/userauth/userauth_test.go` 或 `__tests__/userAuth.test.ts`）。如果测试文件已存在，则追加新的测试用例，不覆盖已有内容。
 
+5. **生成测试意图清单**
+   在模块测试目录下创建 `TEST_INTENT.md`，用一句话记录每个边界测试"到底在防御什么"：
+
+```markdown
+# Test Intent — <module_name>
+
+## <MethodName>
+- test_<name>: 防御 <场景描述> — 注释和测试打架时以此为准
+- test_<name>: 防御 <场景描述>
+```
+  这是整个测试体系的**真值来源**——注释和测试都只是意图的表达，意图本身才是最终仲裁依据。后续 review 时对照此清单判断测试是否跑偏。
+
 ## 交接
 
 完成后向用户说明：
