@@ -108,6 +108,7 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
 **① 前置确认**
 - 执行 `/dep-status` 读取 MODULE_DEPENDENCY.md，确认所有前置依赖模块已通过门禁。
 - **若依赖未就绪**：自动调用 `/mock-gen` 基于 API_CONTRACT.yaml 生成轻量 Mock/Stub，允许当前模块进入 TDD 循环。Mock 行为写入 `MOCK_BEHAVIOR.md` 以供后续真实替换时参考。
+- **测试可行性确认**：确认当前模块能否写自动化测试。若可以，明确测试策略（单元/集成/E2E）和工具；若不可以（如 UI 层、硬件接口），说明理由并在 `MODULE_STATUS.md` 中标记为 `manual-test`，避免隐性裁剪。
 
 **② 测试接力（契约驱动）**
 - 调用 `/test-gen`，AI 基于 API_CONTRACT.yaml 和 PRD 生成测试框架：
