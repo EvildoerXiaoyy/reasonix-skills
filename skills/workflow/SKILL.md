@@ -170,9 +170,10 @@ allowed-tools: ask, read_file, list_dir, run_command, glob, grep
 | 局部集成 | (手动/自动化) | 每个模块通过门禁后，立即与已就绪模块进行接口对齐冒烟 |
 | 全量测试 | (手动) | 全部模块完成后运行完整测试套件 + 端到端集成测试 |
 | 跨模块 review | 手动 | 检查模块间接口是否对齐、数据流是否完整、有无未处理的 TODOs |
+| 整体二审 | 可选 | `/review-request` 将所有模块的最终 diff 送外部模型做全工程审查，发现跨模块的隐性问题 |
 | 合并门禁 | `/codereview --gate --base main` | blocker / waiver / recheck 全流程，决定能否合并 |
 
-**产出物**：门禁报告 + 集成测试结果 + `git commit -m "stage-3: 集成完成 — <项目名>"`
+**产出物**：门禁报告 + 集成测试结果 + 二审报告（可选）+ `git commit -m "stage-3: 集成完成 — <项目名>"`
 
 ---
 
